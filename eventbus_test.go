@@ -25,3 +25,8 @@ func TestNewEventBus(t *testing.T) {
 	eb.Subscribe(1, ts)
 	eb.Publish(1, "xxx")
 }
+
+func TestNilEventBus(t *testing.T) {
+	var eb *EventBus
+	eb.Publish(1, nil)
+}

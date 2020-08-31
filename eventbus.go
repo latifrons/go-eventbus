@@ -9,7 +9,7 @@ import (
 
 type Subscriber interface {
 	Name() string
-	Receive(topic int, msg interface{})
+	Receive(topic int, msg interface{}) error
 }
 
 type EventBus struct {
@@ -30,6 +30,10 @@ func NewEventBus(timeoutControl bool, timeout time.Duration) *EventBus {
 }
 
 func (e *EventBus) RegisterEventType(topic int, topicName string) {
+	if e == nil {
+		// allow empty eventbus for those modules that doesn't need an eventbus
+		return
+	}
 	if _, ok := e.eventTypes[topic]; ok {
 		logrus.WithField("topic", topic).Fatal("topic already exists. programmer bug")
 	}
@@ -37,6 +41,10 @@ func (e *EventBus) RegisterEventType(topic int, topicName string) {
 }
 
 func (e *EventBus) Subscribe(topic int, subscriber Subscriber) {
+	if e == nil {
+		// allow empty eventbus for those modules that doesn't need an eventbus
+		return
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -50,6 +58,10 @@ func (e *EventBus) Subscribe(topic int, subscriber Subscriber) {
 }
 
 func (e *EventBus) Publish(topic int, msg interface{}) {
+	if e == nil {
+		// allow empty eventbus for those modules that doesn't need an eventbus
+		return
+	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -61,14 +73,22 @@ func (e *EventBus) Publish(topic int, msg interface{}) {
 		if e.TimeoutControl {
 			b := make(chan struct{})
 			go func(subscriber2 Subscriber, finishChan chan struct{}) {
-				subscriber2.Receive(topic, msg)
+				err := subscriber2.Receive(topic, msg)
+				if err != nil {
+					logrus.
+						WithField("topic", fmt.Sprintf("%d:%s", topic, e.eventTypes[topic])).
+						WithError(err).Warn("topic not registered. programmer bug")
+
+				}
 				close(b)
 			}(subscriber, b)
 			select {
 			case <-b:
 				continue
 			case <-time.After(e.Timeout):
-				logrus.WithField("sub", subscriber.Name()).WithField("topic", fmt.Sprintf("%d:%s", topic, e.eventTypes[topic])).Warn("eventbus timeout")
+				logrus.WithField("sub", subscriber.Name()).
+					WithField("topic", fmt.Sprintf("%d:%s", topic, e.eventTypes[topic])).
+					Warn("eventbus timeout")
 			}
 		} else {
 			subscriber.Receive(topic, msg)

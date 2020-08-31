@@ -1,11 +1,14 @@
 package eventbus
 
 import (
+	"errors"
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"sync"
 	"time"
 )
+
+var ErrNotSupported = errors.New("not supported")
 
 type Subscriber interface {
 	Name() string

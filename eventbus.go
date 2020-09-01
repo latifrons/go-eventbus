@@ -15,18 +15,26 @@ type Subscriber interface {
 	Receive(topic int, msg interface{}) error
 }
 
+type PublishInfo struct {
+	Topic          int
+	TopicName      string
+	SubscriberName string
+}
+
 type EventBus struct {
 	TimeoutControl bool
 	Timeout        time.Duration
+	OnPublishFunc  func(PublishInfo)
 	subscribers    map[int][]Subscriber
 	eventTypes     map[int]string
 	mu             sync.RWMutex
 }
 
-func NewEventBus(timeoutControl bool, timeout time.Duration) *EventBus {
+func NewEventBus(timeoutControl bool, timeout time.Duration, onPublishFunc func(PublishInfo)) *EventBus {
 	return &EventBus{
 		TimeoutControl: timeoutControl,
 		Timeout:        timeout,
+		OnPublishFunc:  onPublishFunc,
 		subscribers:    make(map[int][]Subscriber),
 		eventTypes:     make(map[int]string),
 	}
@@ -78,6 +86,11 @@ func (e *EventBus) Publish(topic int, msg interface{}) {
 		if e.TimeoutControl {
 			b := make(chan struct{})
 			go func(subscriber2 Subscriber, finishChan chan struct{}) {
+				e.OnPublishFunc(PublishInfo{
+					Topic:          topic,
+					TopicName:      e.eventTypes[topic],
+					SubscriberName: subscriber2.Name(),
+				})
 				err := subscriber2.Receive(topic, msg)
 				if err != nil {
 					logrus.

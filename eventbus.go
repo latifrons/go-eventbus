@@ -41,6 +41,7 @@ func (e *EventBus) RegisterEventType(topic int, topicName string) {
 		logrus.WithField("topic", topic).Fatal("topic already exists. programmer bug")
 	}
 	e.eventTypes[topic] = topicName
+	e.subscribers[topic] = []Subscriber{}
 }
 
 func (e *EventBus) Subscribe(topic int, subscriber Subscriber) {
@@ -53,8 +54,8 @@ func (e *EventBus) Subscribe(topic int, subscriber Subscriber) {
 
 	v, ok := e.subscribers[topic]
 	if !ok {
-		v = []Subscriber{}
-		e.subscribers[topic] = v
+		logrus.WithField("topic", topic).Warn("topic not registered")
+		return
 	}
 	v = append(v, subscriber)
 	e.subscribers[topic] = v
@@ -70,7 +71,8 @@ func (e *EventBus) Publish(topic int, msg interface{}) {
 
 	subscribers, ok := e.subscribers[topic]
 	if !ok {
-		logrus.WithField("topic", topic).Fatal("topic not registered. programmer bug")
+		logrus.WithField("topic", topic).Warn("topic not registered")
+		return
 	}
 	for _, subscriber := range subscribers {
 		if e.TimeoutControl {
@@ -80,8 +82,8 @@ func (e *EventBus) Publish(topic int, msg interface{}) {
 				if err != nil {
 					logrus.
 						WithField("topic", fmt.Sprintf("%d:%s", topic, e.eventTypes[topic])).
-						WithError(err).Warn("topic not registered. programmer bug")
-
+						WithField("sub", subscriber2.Name()).
+						WithError(err).Warn("event subscriber failed to receive topic event")
 				}
 				close(b)
 			}(subscriber, b)
@@ -94,7 +96,13 @@ func (e *EventBus) Publish(topic int, msg interface{}) {
 					Warn("eventbus timeout")
 			}
 		} else {
-			subscriber.Receive(topic, msg)
+			err := subscriber.Receive(topic, msg)
+			if err != nil {
+				logrus.
+					WithField("topic", fmt.Sprintf("%d:%s", topic, e.eventTypes[topic])).
+					WithField("sub", subscriber.Name()).
+					WithError(err).Warn("event subscriber failed to receive topic event")
+			}
 		}
 	}
 }

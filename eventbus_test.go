@@ -13,9 +13,10 @@ func (t TestSubscriber) Name() string {
 	return "TestSubscriber"
 }
 
-func (t TestSubscriber) Receive(topic int, msg interface{}) {
+func (t TestSubscriber) Receive(topic int, msg interface{}) error {
 	fmt.Printf("%d %+v\n", topic, msg)
-	time.Sleep(time.Second * 10)
+	//time.Sleep(time.Second * 10)
+	return nil
 }
 
 func TestNewEventBus(t *testing.T) {

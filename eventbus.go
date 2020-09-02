@@ -69,6 +69,10 @@ func (e *EventBus) Subscribe(topic int, subscriber Subscriber) {
 	e.subscribers[topic] = v
 }
 
+func (e *EventBus) PublishAsync(topic int, msg interface{}) {
+	go e.Publish(topic, msg)
+}
+
 func (e *EventBus) Publish(topic int, msg interface{}) {
 	if e == nil {
 		// allow empty eventbus for those modules that doesn't need an eventbus
@@ -87,7 +91,7 @@ func (e *EventBus) Publish(topic int, msg interface{}) {
 			b := make(chan struct{})
 			go func(subscriber2 Subscriber, finishChan chan struct{}) {
 				e.receiveOne(subscriber2, topic, msg)
-				close(b)
+				close(finishChan)
 			}(subscriber, b)
 			select {
 			case <-b:

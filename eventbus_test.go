@@ -20,7 +20,7 @@ func (t TestSubscriber) Receive(topic int, msg interface{}) error {
 }
 
 func TestNewEventBus(t *testing.T) {
-	eb := NewEventBus(true, time.Second*5)
+	eb := NewEventBus(true, time.Second*5, nil)
 	ts := &TestSubscriber{}
 	eb.RegisterEventType(1, "T1")
 	eb.Subscribe(1, ts)

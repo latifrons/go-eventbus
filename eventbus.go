@@ -24,13 +24,13 @@ type PublishInfo struct {
 type EventBus struct {
 	TimeoutControl bool
 	Timeout        time.Duration
-	OnPublishFunc  func(PublishInfo)
+	OnPublishFunc  func(PublishInfo, interface{})
 	subscribers    map[int][]Subscriber
 	eventTypes     map[int]string
 	mu             sync.RWMutex
 }
 
-func NewEventBus(timeoutControl bool, timeout time.Duration, onPublishFunc func(PublishInfo)) *EventBus {
+func NewEventBus(timeoutControl bool, timeout time.Duration, onPublishFunc func(PublishInfo, interface{})) *EventBus {
 	return &EventBus{
 		TimeoutControl: timeoutControl,
 		Timeout:        timeout,
@@ -86,18 +86,7 @@ func (e *EventBus) Publish(topic int, msg interface{}) {
 		if e.TimeoutControl {
 			b := make(chan struct{})
 			go func(subscriber2 Subscriber, finishChan chan struct{}) {
-				e.OnPublishFunc(PublishInfo{
-					Topic:          topic,
-					TopicName:      e.eventTypes[topic],
-					SubscriberName: subscriber2.Name(),
-				})
-				err := subscriber2.Receive(topic, msg)
-				if err != nil {
-					logrus.
-						WithField("topic", fmt.Sprintf("%d:%s", topic, e.eventTypes[topic])).
-						WithField("sub", subscriber2.Name()).
-						WithError(err).Warn("event subscriber failed to receive topic event")
-				}
+				e.receiveOne(subscriber2, topic, msg)
 				close(b)
 			}(subscriber, b)
 			select {
@@ -109,13 +98,25 @@ func (e *EventBus) Publish(topic int, msg interface{}) {
 					Warn("eventbus timeout")
 			}
 		} else {
-			err := subscriber.Receive(topic, msg)
-			if err != nil {
-				logrus.
-					WithField("topic", fmt.Sprintf("%d:%s", topic, e.eventTypes[topic])).
-					WithField("sub", subscriber.Name()).
-					WithError(err).Warn("event subscriber failed to receive topic event")
-			}
+			e.receiveOne(subscriber, topic, msg)
 		}
+	}
+}
+
+func (e *EventBus) receiveOne(subscriber Subscriber, topic int, msg interface{}) {
+	if e.OnPublishFunc != nil {
+		e.OnPublishFunc(PublishInfo{
+			Topic:          topic,
+			TopicName:      e.eventTypes[topic],
+			SubscriberName: subscriber.Name(),
+		}, msg)
+	}
+
+	err := subscriber.Receive(topic, msg)
+	if err != nil {
+		logrus.
+			WithField("topic", fmt.Sprintf("%d:%s", topic, e.eventTypes[topic])).
+			WithField("sub", subscriber.Name()).
+			WithError(err).Warn("event subscriber failed to receive topic event")
 	}
 }

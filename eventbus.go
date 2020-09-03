@@ -21,22 +21,24 @@ type PublishInfo struct {
 	SubscriberName string
 }
 
-type EventBus struct {
+type EventBusConfig struct {
 	TimeoutControl bool
 	Timeout        time.Duration
 	OnPublishFunc  func(PublishInfo, interface{})
-	subscribers    map[int][]Subscriber
-	eventTypes     map[int]string
-	mu             sync.RWMutex
 }
 
-func NewEventBus(timeoutControl bool, timeout time.Duration, onPublishFunc func(PublishInfo, interface{})) *EventBus {
+type EventBus struct {
+	config      *EventBusConfig
+	subscribers map[int][]Subscriber
+	eventTypes  map[int]string
+	mu          sync.RWMutex
+}
+
+func NewEventBus(config *EventBusConfig) *EventBus {
 	return &EventBus{
-		TimeoutControl: timeoutControl,
-		Timeout:        timeout,
-		OnPublishFunc:  onPublishFunc,
-		subscribers:    make(map[int][]Subscriber),
-		eventTypes:     make(map[int]string),
+		config:      config,
+		subscribers: make(map[int][]Subscriber),
+		eventTypes:  make(map[int]string),
 	}
 }
 
@@ -87,7 +89,7 @@ func (e *EventBus) Publish(topic int, msg interface{}) {
 		return
 	}
 	for _, subscriber := range subscribers {
-		if e.TimeoutControl {
+		if e.config.TimeoutControl {
 			b := make(chan struct{})
 			go func(subscriber2 Subscriber, finishChan chan struct{}) {
 				e.receiveOne(subscriber2, topic, msg)
@@ -96,7 +98,7 @@ func (e *EventBus) Publish(topic int, msg interface{}) {
 			select {
 			case <-b:
 				continue
-			case <-time.After(e.Timeout):
+			case <-time.After(e.config.Timeout):
 				logrus.WithField("sub", subscriber.Name()).
 					WithField("topic", fmt.Sprintf("%d:%s", topic, e.eventTypes[topic])).
 					Warn("eventbus timeout")
@@ -108,8 +110,8 @@ func (e *EventBus) Publish(topic int, msg interface{}) {
 }
 
 func (e *EventBus) receiveOne(subscriber Subscriber, topic int, msg interface{}) {
-	if e.OnPublishFunc != nil {
-		e.OnPublishFunc(PublishInfo{
+	if e.config.OnPublishFunc != nil {
+		e.config.OnPublishFunc(PublishInfo{
 			Topic:          topic,
 			TopicName:      e.eventTypes[topic],
 			SubscriberName: subscriber.Name(),
